@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  credit-risk-app:
+    build: .
+    ports:
+      - "8501:8501"
+    environment:
+      - MODEL_PATH=artifacts/model_data.joblib
+    volumes:
+      - ./artifacts:/app/artifacts:ro
+    restart: unless-stopped

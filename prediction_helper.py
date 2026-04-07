@@ -2,20 +2,47 @@ import joblib
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
+import logging
+from config import MODEL_PATH, DEFAULT_FEATURE_VALUES, CREDIT_SCORE_CONFIG, CREDIT_RATING_THRESHOLDS
 
-MODEL_PATH = 'artifacts/model_data.joblib'
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-model_data = joblib.load(MODEL_PATH)
-model = model_data['model']
-scaler = model_data['scaler']
-features = model_data['features']
-cols_to_scale = model_data['cols_to_scale']
+_model = None
+_scaler = None
+_features = None
+_cols_to_scale = None
 
+def load_model():
+    global _model, _scaler, _features, _cols_to_scale
+    
+    if _model is not None:
+        return _model, _scaler, _features, _cols_to_scale
+    
+    try:
+        model_data = joblib.load(MODEL_PATH)
+        _model = model_data['model']
+        _scaler = model_data['scaler']
+        _features = model_data['features']
+        _cols_to_scale = model_data['cols_to_scale']
+        logger.info("Model loaded successfully")
+        return _model, _scaler, _features, _cols_to_scale
+    except FileNotFoundError:
+        logger.error(f"Model file not found at {MODEL_PATH}")
+        raise
+    except KeyError as e:
+        logger.error(f"Missing key in model data: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"Error loading model: {e}")
+        raise
 
 def prepare_input(age, income, loan_amount, loan_tenure_months, avg_dpd_per_delinquency,
-                    delinquency_ratio, credit_utilization_ratio, num_open_accounts, residence_type,
-                    loan_purpose, loan_type):
-
+                  delinquency_ratio, credit_utilization_ratio, num_open_accounts, residence_type,
+                  loan_purpose, loan_type):
+    
+    model, scaler, features, cols_to_scale = load_model()
+    
     input_data = {
         'age': age,
         'loan_tenure_months': loan_tenure_months,
@@ -30,62 +57,45 @@ def prepare_input(age, income, loan_amount, loan_tenure_months, avg_dpd_per_deli
         'loan_purpose_Home': 1 if loan_purpose == 'Home' else 0,
         'loan_purpose_Personal': 1 if loan_purpose == 'Personal' else 0,
         'loan_type_Unsecured': 1 if loan_type == 'Unsecured' else 0,
-        'number_of_dependants': 1,
-        'years_at_current_address': 1,
-        'zipcode': 1,
-        'sanction_amount': 1,
-        'processing_fee': 1,
-        'gst': 1,
-        'net_disbursement': 1,
-        'principal_outstanding': 1,
-        'bank_balance_at_application': 1,
-        'number_of_closed_accounts': 1,
-        'enquiry_count': 1
     }
-
+    
+    input_data.update(DEFAULT_FEATURE_VALUES)
+    
     df = pd.DataFrame([input_data])
-
     df[cols_to_scale] = scaler.transform(df[cols_to_scale])
-
     df = df[features]
-
+    
     return df
-
 
 def predict(age, income, loan_amount, loan_tenure_months, avg_dpd_per_delinquency,
             delinquency_ratio, credit_utilization_ratio, num_open_accounts,
             residence_type, loan_purpose, loan_type):
-
+    
     input_df = prepare_input(age, income, loan_amount, loan_tenure_months, avg_dpd_per_delinquency,
                              delinquency_ratio, credit_utilization_ratio, num_open_accounts, residence_type,
                              loan_purpose, loan_type)
-
+    
     probability, credit_score, rating = calculate_credit_score(input_df)
-
+    
     return probability, credit_score, rating
 
-
-def calculate_credit_score(input_df, base_score=300, scale_length=600):
+def calculate_credit_score(input_df):
+    model, _, _, _ = load_model()
+    
+    base_score = CREDIT_SCORE_CONFIG['base_score']
+    scale_length = CREDIT_SCORE_CONFIG['scale_length']
+    
     x = np.dot(input_df.values, model.coef_.T) + model.intercept_
-
     default_probability = 1 / (1 + np.exp(-x))
-
     non_default_probability = 1 - default_probability
-
     credit_score = base_score + non_default_probability.flatten() * scale_length
-
-    def get_rating(score):
-        if 300 <= score < 500:
-            return 'Poor'
-        elif 500 <= score < 650:
-            return 'Average'
-        elif 650 <= score < 750:
-            return 'Good'
-        elif 750 <= score <= 900:
-            return 'Excellent'
-        else:
-            return 'Undefined'
-
+    
     rating = get_rating(credit_score[0])
-
+    
     return default_probability.flatten()[0], int(credit_score[0]), rating
+
+def get_rating(score):
+    for rating_name, (min_score, max_score) in CREDIT_RATING_THRESHOLDS.items():
+        if min_score <= score < max_score:
+            return rating_name.capitalize()
+    return 'Undefined'

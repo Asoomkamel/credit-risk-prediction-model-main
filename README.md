@@ -157,9 +157,10 @@ Follow these steps to run the predictor locally:
 
 ## 🧑‍💻 About the Developer
 
-Developed by **Vraj Dobariya**, a data scientist passionate about building AI-driven solutions for finance and beyond. Connect with me on:
-- 📂 [GitHub](https://github.com/Vraj-Data-Scientist)
-- 🔗 [LinkedIn](https://www.linkedin.com/in/vraj-dobariya/) 
+
+- 📂 [GitHub](https://github.com/Asoomkamel )
+- 🔗 [LinkedIn](https://www.linkedin.com/in/mutasim-al-kamil-40a299318) 
+
 
 ---
 
